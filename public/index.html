@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <title>🔍 eBay Pokémon 卡片成交走勢圖</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 1.5rem;
+            max-width: 800px;
+            margin: auto;
+        }
+
+        h1 {
+            color: #0064d2;
+        }
+
+        input,
+        button {
+            font-size: 1rem;
+            padding: 7px;
+        }
+
+        canvas {
+            margin-top: 2rem;
+            width: 100%;
+            height: 400px;
+        }
+
+        #loading {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📈 Pokémon 卡片成交走勢 (eBay API)</h1>
+    <p>輸入卡片關鍵字（例如 <b>Pokemon Pikachu UPC PSA 10</b>）即時查看最近成交價</p>
+    <input type="text" id="query" placeholder="輸入卡名" style="width:70%">
+    <button onclick="search()">查詢</button>
+    <p id="loading">⌛ 請稍候，正在從 eBay 取得資料…</p>
+    <canvas id="chart"></canvas>
+
+    <script>
+        async function search() {
+            const query = document.getElementById("query").value.trim();
+            if (!query) return alert("請輸入關鍵字！");
+            document.getElementById("loading").style.display = "block";
+
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            document.getElementById("loading").style.display = "none";
+
+            console.log("API Response:", data); // Debug log
+
+            if (!data.itemSummaries) {
+                console.error("No itemSummaries found:", data);
+                return alert("查無結果，或 API 回傳錯誤。");
+            }
+
+            console.log("Total items:", data.itemSummaries.length); // Debug log
+
+            const items = data.itemSummaries
+                .filter(it => it.price)
+                .map((it, index) => ({
+                    date: it.itemEndDate ? new Date(it.itemEndDate) : new Date(it.itemCreationDate),
+                    price: parseFloat(it.price.value),
+                    index: index + 1
+                }))
+                .sort((a, b) => a.date - b.date);
+
+            console.log("Filtered items:", items.length, items); // Debug log
+
+            if (items.length === 0) {
+                return alert("沒有找到有價格的商品");
+            }
+
+            const labels = items.map(i => i.date.toLocaleDateString());
+            const prices = items.map(i => i.price);
+
+            drawChart(query, labels, prices);
+        }
+
+        function drawChart(title, labels, prices) {
+            console.log("drawChart called with:", { title, labels, prices }); // Debug log
+
+            const canvas = document.getElementById("chart");
+            if (!canvas) {
+                console.error("Canvas element not found!");
+                return;
+            }
+
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                console.error("Cannot get 2D context!");
+                return;
+            }
+
+            if (typeof Chart === 'undefined') {
+                console.error("Chart.js not loaded!");
+                return alert("Chart.js 載入失敗，請重新整理頁面");
+            }
+
+            if (window.chart && typeof window.chart.destroy === 'function') {
+                window.chart.destroy();
+            }
+
+            window.chart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels,
+                    datasets: [{
+                        label: `${title} 最近成交價 (USD)`,
+                        data: prices,
+                        borderColor: "#0064d2",
+                        tension: 0.25,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: false } },
+                    responsive: true
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
